@@ -1,21 +1,15 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
+يمر بالخطوات ويفحص المواعيد ويرسل تنبيه تيليجرام عند التوفّر.
 """
 import os
-import smtplib
-import ssl
-from email.message import EmailMessage
 
 import requests
 from playwright.sync_api import sync_playwright
 
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-
-GMAIL_USER = os.environ.get("GMAIL_USER", "")
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
-MAIL_TO = os.environ.get("MAIL_TO", "") or GMAIL_USER
 
 START = "https://terminvergabe.muelheim-ruhr.de/select2?md=9"
 
@@ -48,30 +42,6 @@ def send_photo(path, caption):
             data={"chat_id": CHAT_ID, "text": caption},
             timeout=30,
         )
-
-
-def send_email(subject, body, image_path=None):
-    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
-        print("email skipped - no GMAIL secrets set")
-        return
-    try:
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = GMAIL_USER
-        msg["To"] = MAIL_TO
-        msg.set_content(body)
-        if image_path:
-            with open(image_path, "rb") as f:
-                msg.add_attachment(
-                    f.read(), maintype="image", subtype="png", filename="slot.png"
-                )
-        context = ssl.create_default_context()
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
-            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-            server.send_message(msg)
-        print("email sent")
-    except Exception as e:
-        print("email error:", e)
 
 
 def main():
@@ -142,7 +112,6 @@ def main():
                         "Schnell buchen:\n" + START
                     )
                 send_photo("slot.png", caption)
-                send_email("Termin Watcher", caption, "slot.png")
                 print("notified")
             else:
                 print("no slot")
