@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
-نسخة تشخيص: ينقر كل checkbox_new حتى يتفعّل OK.
+نسخة تشخيص: تفعّل المربعات + تطلق الأحداث + OK.
 """
 import os
 import smtplib
@@ -115,33 +115,33 @@ def main():
             page.get_by_role("button", name="Weiter").first.click()
             page.wait_for_timeout(2500)
 
-            # كرّر النقر على كل checkbox غير مفعّل حتى تتفعّل كلها (حتى 6 جولات)
-            for attempt in range(6):
-                remaining = page.evaluate("""() => {
-                    const cbs = [...document.querySelectorAll('input.documentlist_item_cb')];
-                    let clicked = 0;
-                    cbs.forEach(cb => {
-                        if (!cb.checked) {
-                            const lbl = cb.parentElement.querySelector('label.required');
-                            if (lbl) { lbl.click(); }
-                            else { cb.click(); }
-                            clicked++;
-                        }
-                    });
-                    const total = cbs.length;
-                    const done = cbs.filter(c => c.checked).length;
-                    return {total, done, clicked};
-                }""")
-                page.wait_for_timeout(800)
-                if remaining["done"] >= remaining["total"] and remaining["total"] > 0:
-                    break
+            # فعّل كل المربعات وأطلق كل الأحداث الممكنة
+            res = page.evaluate("""() => {
+                const cbs = [...document.querySelectorAll('input.documentlist_item_cb')];
+                cbs.forEach(cb => {
+                    cb.checked = true;
+                    ['mousedown','mouseup','click','change','input'].forEach(ev =>
+                        cb.dispatchEvent(new Event(ev, {bubbles: true})));
+                    const lbl = cb.parentElement.querySelector('label.required');
+                    if (lbl) ['mousedown','mouseup','click'].forEach(ev =>
+                        lbl.dispatchEvent(new Event(ev, {bubbles: true})));
+                });
+                return {total: cbs.length, done: cbs.filter(c => c.checked).length};
+            }""")
+            page.wait_for_timeout(1500)
 
-            page.wait_for_timeout(1000)
-            shot(f"5- مفعّل {remaining['done']}/{remaining['total']}")
-
-            page.get_by_role("button", name="OK").first.click()
+            # أزل تعطيل زر OK واضغطه عبر JS
+            page.evaluate("""() => {
+                const ok = document.querySelector('#OKButton');
+                if (ok) {
+                    ok.removeAttribute('disabled');
+                    ok.removeAttribute('aria-disabled');
+                    ok.classList.remove('disabledButton');
+                    ok.click();
+                }
+            }""")
             page.wait_for_timeout(2500)
-            shot("6- بعد OK")
+            shot(f"6- بعد OK ({res['done']}/{res['total']})")
 
         except Exception as e:
             try:
