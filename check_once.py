@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
-نسخة تشخيص: تطبع HTML صف Auflagenänderung.
+نسخة تشخيص: تضغط + على cnc-2817 ثم Weiter.
 """
 import os
 import smtplib
@@ -89,6 +89,11 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_context(locale="de-DE").new_page()
+
+        def shot(label):
+            page.screenshot(path="dbg.png", full_page=True)
+            send_photo("dbg.png", f"📍 {label}\nURL: {page.url}")
+
         try:
             page.goto(start, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
@@ -104,19 +109,20 @@ def main():
             ).locator("visible=true").first.click()
             page.wait_for_timeout(2000)
 
-            html = page.evaluate("""() => {
-                const els = [...document.querySelectorAll('*')];
-                const el = els.find(e => e.children.length === 0 &&
-                    e.textContent.includes('Auflagenänderung'));
-                if (!el) return 'NOT FOUND';
-                let p = el;
-                for (let i = 0; i < 5; i++) { if (p.parentElement) p = p.parentElement; }
-                return p.outerHTML.substring(0, 2500);
-            }""")
-            send_msg("HTML:\n" + html)
+            # زر + الخاص بـ Auflagenänderung (Wechsel Studium) = cnc-2817
+            page.locator("#button-plus-2817").click()
+            page.wait_for_timeout(1500)
+            shot("3- بعد + على 2817")
+
+            page.get_by_role("button", name="Weiter").first.click()
+            page.wait_for_timeout(2000)
+            shot("4- بعد Weiter")
 
         except Exception as e:
-            send_msg(f"فشل: {e}")
+            try:
+                shot(f"فشل: {e}")
+            except Exception:
+                pass
         finally:
             browser.close()
 
