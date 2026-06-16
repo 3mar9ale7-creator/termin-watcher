@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
-نسخة تشخيص: ينقر labels المستندات فعلياً ثم OK.
+نسخة تشخيص: ينقر كل checkbox_new حتى يتفعّل OK.
 """
 import os
 import smtplib
@@ -115,18 +115,29 @@ def main():
             page.get_by_role("button", name="Weiter").first.click()
             page.wait_for_timeout(2500)
 
-            # انقر فعلياً على كل label.required داخل النافذة (force)
-            labels = page.locator(".modal label.required")
-            n = labels.count()
-            for i in range(n):
-                try:
-                    labels.nth(i).scroll_into_view_if_needed(timeout=3000)
-                    labels.nth(i).click(force=True, timeout=3000)
-                    page.wait_for_timeout(200)
-                except Exception:
-                    pass
-            page.wait_for_timeout(1500)
-            shot(f"5- بعد نقر {n} labels")
+            # كرّر النقر على كل checkbox غير مفعّل حتى تتفعّل كلها (حتى 6 جولات)
+            for attempt in range(6):
+                remaining = page.evaluate("""() => {
+                    const cbs = [...document.querySelectorAll('input.documentlist_item_cb')];
+                    let clicked = 0;
+                    cbs.forEach(cb => {
+                        if (!cb.checked) {
+                            const lbl = cb.parentElement.querySelector('label.required');
+                            if (lbl) { lbl.click(); }
+                            else { cb.click(); }
+                            clicked++;
+                        }
+                    });
+                    const total = cbs.length;
+                    const done = cbs.filter(c => c.checked).length;
+                    return {total, done, clicked};
+                }""")
+                page.wait_for_timeout(800)
+                if remaining["done"] >= remaining["total"] and remaining["total"] > 0:
+                    break
+
+            page.wait_for_timeout(1000)
+            shot(f"5- مفعّل {remaining['done']}/{remaining['total']}")
 
             page.get_by_role("button", name="OK").first.click()
             page.wait_for_timeout(2500)
