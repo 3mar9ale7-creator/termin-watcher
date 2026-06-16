@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
-نسخة تشخيص: تفعّل المربعات + تطلق الأحداث + OK.
+يمر بكل الخطوات ويفحص المواعيد ويرسل تنبيه عند التوفّر.
 """
 import os
 import smtplib
@@ -17,6 +17,8 @@ CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 GMAIL_USER = os.environ.get("GMAIL_USER", "")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 MAIL_TO = os.environ.get("MAIL_TO", "") or GMAIL_USER
+
+START = "https://terminvergabe.muelheim-ruhr.de/select2?md=9"
 
 NO_SLOT = [
     "keine zeiten verfügbar",
@@ -85,17 +87,11 @@ def send_email(subject, body, image_path=None):
 
 
 def main():
-    start = "https://terminvergabe.muelheim-ruhr.de/select2?md=9"
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_context(locale="de-DE").new_page()
-
-        def shot(label):
-            page.screenshot(path="dbg.png", full_page=True)
-            send_photo("dbg.png", f"📍 {label}\nURL: {page.url}")
-
         try:
-            page.goto(start, wait_until="domcontentloaded", timeout=60000)
+            page.goto(START, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
 
             try:
@@ -115,8 +111,8 @@ def main():
             page.get_by_role("button", name="Weiter").first.click()
             page.wait_for_timeout(2500)
 
-            # فعّل كل المربعات وأطلق كل الأحداث الممكنة
-            res = page.evaluate("""() => {
+            # فعّل المربعات وأطلق الأحداث
+            page.evaluate("""() => {
                 const cbs = [...document.querySelectorAll('input.documentlist_item_cb')];
                 cbs.forEach(cb => {
                     cb.checked = true;
@@ -126,11 +122,10 @@ def main():
                     if (lbl) ['mousedown','mouseup','click'].forEach(ev =>
                         lbl.dispatchEvent(new Event(ev, {bubbles: true})));
                 });
-                return {total: cbs.length, done: cbs.filter(c => c.checked).length};
             }""")
             page.wait_for_timeout(1500)
 
-            # أزل تعطيل زر OK واضغطه عبر JS
+            # OK
             page.evaluate("""() => {
                 const ok = document.querySelector('#OKButton');
                 if (ok) {
@@ -141,11 +136,34 @@ def main():
                 }
             }""")
             page.wait_for_timeout(2500)
-            shot(f"6- بعد OK ({res['done']}/{res['total']})")
+
+            # Schritt 3 -> Weiter -> /suggest (Schritt 4)
+            page.get_by_role("button", name="Weiter").first.click()
+            page.wait_for_url("**/suggest", timeout=30000)
+            page.wait_for_timeout(2500)
+
+            # فحص المواعيد
+            text = page.inner_text("body").lower()
+            reached = "/suggest" in page.url and any(s in text for s in REACHED)
+
+            if any(s in text for s in NO_SLOT):
+                print("no slot")
+            elif reached or os.getenv("TEST_MODE"):
+                page.screenshot(path="slot.png", full_page=True)
+                caption = (
+                    "🚨 Termin verfügbar in Mülheim!\n"
+                    "Schnell buchen:\n" + START
+                )
+                send_photo("slot.png", caption)
+                send_email("🚨 Termin verfügbar!", caption, "slot.png")
+                print("AVAILABLE - notified")
+            else:
+                print("unknown page state")
 
         except Exception as e:
             try:
-                shot(f"فشل: {e}")
+                page.screenshot(path="debug.png", full_page=True)
+                send_photo("debug.png", f"⚠️ فشل: {e}")
             except Exception:
                 pass
         finally:
