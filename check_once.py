@@ -101,7 +101,7 @@ def main():
             print("error/session page - skip")
         elif any(s in text for s in NO_SLOT):
             print("no slot")
-        elif True:
+        elif reached:
             page.screenshot(path="slot.png", full_page=True)
             caption = (
                 "🚨 Es scheint jetzt einen freien Termin zu geben!\n"
