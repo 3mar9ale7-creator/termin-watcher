@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
-نسخة تشخيص: تطبع HTML نافذة المستندات (modal).
+نسخة تشخيص: تفعّل المربعات بـ JS ثم OK.
 """
 import os
 import smtplib
@@ -89,6 +89,11 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_context(locale="de-DE").new_page()
+
+        def shot(label):
+            page.screenshot(path="dbg.png", full_page=True)
+            send_photo("dbg.png", f"📍 {label}\nURL: {page.url}")
+
         try:
             page.goto(start, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
@@ -110,15 +115,30 @@ def main():
             page.get_by_role("button", name="Weiter").first.click()
             page.wait_for_timeout(2500)
 
-            # اطبع HTML نافذة المستندات (modal)
-            html = page.evaluate("""() => {
-                const m = document.querySelector('.modal.show, .modal[style*="display: block"], [role=dialog]');
-                return m ? m.outerHTML.substring(0, 3000) : 'MODAL NOT FOUND';
+            # فعّل كل مربعات المستندات عبر JS وأطلق أحداث change
+            page.evaluate("""() => {
+                const cbs = document.querySelectorAll('input.documentlist_item_cb, .modal input[type=checkbox]');
+                cbs.forEach(cb => {
+                    if (!cb.checked) {
+                        cb.checked = true;
+                        cb.dispatchEvent(new Event('change', {bubbles: true}));
+                        cb.dispatchEvent(new Event('click', {bubbles: true}));
+                    }
+                });
+                return cbs.length;
             }""")
-            send_msg("MODAL:\n" + html)
+            page.wait_for_timeout(1500)
+            shot("5- بعد تفعيل المربعات")
+
+            page.get_by_role("button", name="OK").first.click()
+            page.wait_for_timeout(2500)
+            shot("6- بعد OK")
 
         except Exception as e:
-            send_msg(f"فشل: {e}")
+            try:
+                shot(f"فشل: {e}")
+            except Exception:
+                pass
         finally:
             browser.close()
 
