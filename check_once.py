@@ -86,12 +86,23 @@ def main():
         try:
             page.goto(start, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
-            shot("1- بعد فتح select2")
 
-            page.get_by_text("Studierende und Anerkennung", exact=False).first.click()
+            # اقبل الكوكيز إن ظهرت
+            try:
+                page.get_by_role("button", name="Akzeptieren").click(timeout=5000)
+                page.wait_for_timeout(1500)
+            except Exception:
+                pass
+            shot("1- بعد قبول الكوكيز")
+
+            # افتح قسم Studierende (عنصر مرئي فقط، ليس tooltip)
+            page.get_by_text(
+                "Studierende und Anerkennung der Berufsqualifikation", exact=False
+            ).locator("visible=true").first.click()
             page.wait_for_timeout(2000)
             shot("2- بعد فتح Studierende")
 
+            # اضغط + بجانب Auflagenänderung
             box = page.locator(
                 "xpath=//*[contains(text(),'Auflagenänderung')]/following::*[self::button or self::a or self::input][1]"
             ).first
