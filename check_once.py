@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
-نسخة تشخيص: + على 2817، Weiter، تعليم المربعات، OK.
+نسخة تشخيص: تطبع HTML نافذة المستندات (modal).
 """
 import os
 import smtplib
@@ -89,11 +89,6 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_context(locale="de-DE").new_page()
-
-        def shot(label):
-            page.screenshot(path="dbg.png", full_page=True)
-            send_photo("dbg.png", f"📍 {label}\nURL: {page.url}")
-
         try:
             page.goto(start, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
@@ -113,32 +108,17 @@ def main():
             page.wait_for_timeout(1500)
 
             page.get_by_role("button", name="Weiter").first.click()
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(2500)
 
-            # نافذة المستندات: علّم كل المربعات المرئية
-            boxes = page.locator("input[type=checkbox]:visible")
-            n = boxes.count()
-            for i in range(n):
-                try:
-                    boxes.nth(i).check(timeout=3000)
-                except Exception:
-                    try:
-                        boxes.nth(i).click(timeout=3000)
-                    except Exception:
-                        pass
-            page.wait_for_timeout(1000)
-            shot(f"5- بعد تعليم {n} مربعات")
-
-            # زر OK
-            page.get_by_role("button", name="OK").first.click()
-            page.wait_for_timeout(2000)
-            shot("6- بعد OK")
+            # اطبع HTML نافذة المستندات (modal)
+            html = page.evaluate("""() => {
+                const m = document.querySelector('.modal.show, .modal[style*="display: block"], [role=dialog]');
+                return m ? m.outerHTML.substring(0, 3000) : 'MODAL NOT FOUND';
+            }""")
+            send_msg("MODAL:\n" + html)
 
         except Exception as e:
-            try:
-                shot(f"فشل: {e}")
-            except Exception:
-                pass
+            send_msg(f"فشل: {e}")
         finally:
             browser.close()
 
