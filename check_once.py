@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
-نسخة تشخيص.
+نسخة تشخيص: تطبع HTML صف Auflagenänderung.
 """
 import os
 import smtplib
@@ -49,6 +49,17 @@ def send_photo(path, caption):
         )
 
 
+def send_msg(text):
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+            data={"chat_id": CHAT_ID, "text": text},
+            timeout=30,
+        )
+    except Exception as e:
+        print("Telegram msg error:", e)
+
+
 def send_email(subject, body, image_path=None):
     if not GMAIL_USER or not GMAIL_APP_PASSWORD:
         print("email skipped - no GMAIL secrets set")
@@ -78,11 +89,6 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_context(locale="de-DE").new_page()
-
-        def shot(label):
-            page.screenshot(path="dbg.png", full_page=True)
-            send_photo("dbg.png", f"📍 {label}\nURL: {page.url}")
-
         try:
             page.goto(start, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
@@ -98,26 +104,19 @@ def main():
             ).locator("visible=true").first.click()
             page.wait_for_timeout(2000)
 
-            # صفّ Auflagenänderung، ثم زر + (آخر زر مرئي في الصف)
-            row = page.locator(
-                "xpath=//*[contains(normalize-space(.),'Auflagenänderung')]"
-                "[contains(@class,'row') or self::tr or self::li or self::div]"
-                "[.//button or .//input[@type='button']][last()]"
-            ).first
-            plus = row.get_by_role("button").filter(has_text="+").last
-            plus.click()
-            page.wait_for_timeout(1500)
-            shot("3- بعد الضغط على +")
-
-            page.get_by_role("button", name="Weiter").first.click()
-            page.wait_for_timeout(2000)
-            shot("4- بعد Weiter الأول")
+            html = page.evaluate("""() => {
+                const els = [...document.querySelectorAll('*')];
+                const el = els.find(e => e.children.length === 0 &&
+                    e.textContent.includes('Auflagenänderung'));
+                if (!el) return 'NOT FOUND';
+                let p = el;
+                for (let i = 0; i < 5; i++) { if (p.parentElement) p = p.parentElement; }
+                return p.outerHTML.substring(0, 2500);
+            }""")
+            send_msg("HTML:\n" + html)
 
         except Exception as e:
-            try:
-                shot(f"فشل: {e}")
-            except Exception:
-                pass
+            send_msg(f"فشل: {e}")
         finally:
             browser.close()
 
