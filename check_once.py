@@ -1,34 +1,40 @@
 #!/usr/bin/env python3
 """
-Termin Watcher — نسخة GitHub Actions (فحص واحد ثم خروج).
-تُشغَّل تلقائياً كل بضع دقائق عبر GitHub، وترسل رسالة تيليجرام فقط
-عند توفّر موعد فعلي. الحجز تقوم به أنت يدوياً عبر الرابط.
+Termin Watcher - GitHub Actions version (run once then exit).
+Runs automatically every few minutes via GitHub, and sends an alert
+(Telegram + email) only when a real appointment is available.
+You do the booking manually via the link.
 """
 import os
+import smtplib
+import ssl
+from email.message import EmailMessage
+
 import requests
 from playwright.sync_api import sync_playwright
 
-TOKEN   = os.environ["TELEGRAM_TOKEN"]
+TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 URL = os.environ.get(
     "TERMIN_URL",
     "https://terminvergabe.muelheim-ruhr.de/location?mdt=150&select_cnc=1&cnc-2817=1",
 )
 
-# عبارات تعني "لا توجد مواعيد" (مضبوطة على نص صفحتك الحقيقي)
+GMAIL_USER = os.environ.get("GMAIL_USER", "")
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
+MAIL_TO = os.environ.get("MAIL_TO", "") or GMAIL_USER
+
 NO_SLOT = [
     "keine zeiten verfügbar",
     "kein freier termin verfügbar",
     "leider kein termin verfügbar",
     "ist leider kein termin",
 ]
-# عبارات تؤكد أننا وصلنا لصفحة الخطوة ٤ (تظهر في الحالتين)
 REACHED = [
     "terminvorschläge",
     "übersicht zu ihrem termin",
     "schritt 4",
 ]
-# صفحات الخطأ التي يجب تجاهلها
 ERRORS = [
     "kein gültiger mandant",
     "sitzung ist abgelaufen",
@@ -54,6 +60,30 @@ def send_photo(path, caption):
         )
 
 
+def send_email(subject, body, image_path=None):
+    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
+        print("email skipped - no GMAIL secrets set")
+        return
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = GMAIL_USER
+        msg["To"] = MAIL_TO
+        msg.set_content(body)
+        if image_path:
+            with open(image_path, "rb") as f:
+                msg.add_attachment(
+                    f.read(), maintype="image", subtype="png", filename="slot.png"
+                )
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            server.send_message(msg)
+        print("email sent")
+    except Exception as e:
+        print("email error:", e)
+
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -68,19 +98,20 @@ def main():
         reached = any(s in text for s in REACHED)
 
         if any(s in text for s in ERRORS) and not reached:
-            print("error/session page — skip")
+            print("error/session page - skip")
         elif any(s in text for s in NO_SLOT):
             print("no slot")
         elif reached:
             page.screenshot(path="slot.png", full_page=True)
-            send_photo(
-                "slot.png",
-                "🚨 يبدو أن هناك موعداً شاغراً الآن في مكتب الأجانب!\n"
-                "افتح واحجز بسرعة:\n" + URL,
+            caption = (
+                "🚨 Es scheint jetzt einen freien Termin zu geben!\n"
+                "Schnell buchen:\n" + URL
             )
-            print("AVAILABLE — notified")
+            send_photo("slot.png", caption)
+            send_email("🚨 Termin verfügbar!", caption, "slot.png")
+            print("AVAILABLE - notified")
         else:
-            print("unknown page state — no message sent")
+            print("unknown page state - no message sent")
 
         browser.close()
 
