@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
-يمر بكل الخطوات ويفحص المواعيد ويرسل تنبيه عند التوفّر.
 """
 import os
 import smtplib
@@ -51,17 +50,6 @@ def send_photo(path, caption):
         )
 
 
-def send_msg(text):
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-            data={"chat_id": CHAT_ID, "text": text},
-            timeout=30,
-        )
-    except Exception as e:
-        print("Telegram msg error:", e)
-
-
 def send_email(subject, body, image_path=None):
     if not GMAIL_USER or not GMAIL_APP_PASSWORD:
         print("email skipped - no GMAIL secrets set")
@@ -87,6 +75,7 @@ def send_email(subject, body, image_path=None):
 
 
 def main():
+    test_mode = bool(os.getenv("TEST_MODE"))
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_context(locale="de-DE").new_page()
@@ -111,7 +100,6 @@ def main():
             page.get_by_role("button", name="Weiter").first.click()
             page.wait_for_timeout(2500)
 
-            # فعّل المربعات وأطلق الأحداث
             page.evaluate("""() => {
                 const cbs = [...document.querySelectorAll('input.documentlist_item_cb')];
                 cbs.forEach(cb => {
@@ -125,7 +113,6 @@ def main():
             }""")
             page.wait_for_timeout(1500)
 
-            # OK
             page.evaluate("""() => {
                 const ok = document.querySelector('#OKButton');
                 if (ok) {
@@ -137,28 +124,28 @@ def main():
             }""")
             page.wait_for_timeout(2500)
 
-            # Schritt 3 -> Weiter -> /suggest (Schritt 4)
             page.get_by_role("button", name="Weiter").first.click()
             page.wait_for_url("**/suggest", timeout=30000)
             page.wait_for_timeout(2500)
 
-            # فحص المواعيد
             text = page.inner_text("body").lower()
             reached = "/suggest" in page.url and any(s in text for s in REACHED)
+            has_slot = reached and not any(s in text for s in NO_SLOT)
 
-            if any(s in text for s in NO_SLOT):
-                print("no slot")
-            elif reached or os.getenv("TEST_MODE"):
+            if has_slot or test_mode:
                 page.screenshot(path="slot.png", full_page=True)
-                caption = (
-                    "🚨 Termin verfügbar in Mülheim!\n"
-                    "Schnell buchen:\n" + START
-                )
+                if test_mode and not has_slot:
+                    caption = "✅ TEST: التنبيه يعمل (لا يوجد موعد فعلي الآن)"
+                else:
+                    caption = (
+                        "🚨 Termin verfügbar in Mülheim!\n"
+                        "Schnell buchen:\n" + START
+                    )
                 send_photo("slot.png", caption)
-                send_email("🚨 Termin verfügbar!", caption, "slot.png")
-                print("AVAILABLE - notified")
+                send_email("Termin Watcher", caption, "slot.png")
+                print("notified")
             else:
-                print("unknown page state")
+                print("no slot")
 
         except Exception as e:
             try:
