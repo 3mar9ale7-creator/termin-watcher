@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
-نسخة تشخيص: تضغط + على cnc-2817 ثم Weiter.
+نسخة تشخيص: + على 2817، Weiter، تعليم المربعات، OK.
 """
 import os
 import smtplib
@@ -109,14 +109,30 @@ def main():
             ).locator("visible=true").first.click()
             page.wait_for_timeout(2000)
 
-            # زر + الخاص بـ Auflagenänderung (Wechsel Studium) = cnc-2817
             page.locator("#button-plus-2817").click()
             page.wait_for_timeout(1500)
-            shot("3- بعد + على 2817")
 
             page.get_by_role("button", name="Weiter").first.click()
             page.wait_for_timeout(2000)
-            shot("4- بعد Weiter")
+
+            # نافذة المستندات: علّم كل المربعات المرئية
+            boxes = page.locator("input[type=checkbox]:visible")
+            n = boxes.count()
+            for i in range(n):
+                try:
+                    boxes.nth(i).check(timeout=3000)
+                except Exception:
+                    try:
+                        boxes.nth(i).click(timeout=3000)
+                    except Exception:
+                        pass
+            page.wait_for_timeout(1000)
+            shot(f"5- بعد تعليم {n} مربعات")
+
+            # زر OK
+            page.get_by_role("button", name="OK").first.click()
+            page.wait_for_timeout(2000)
+            shot("6- بعد OK")
 
         except Exception as e:
             try:
