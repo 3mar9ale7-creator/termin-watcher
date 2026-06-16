@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
-نسخة تشخيص: تفعّل المربعات بـ JS ثم OK.
+نسخة تشخيص: ينقر labels المستندات فعلياً ثم OK.
 """
 import os
 import smtplib
@@ -115,20 +115,18 @@ def main():
             page.get_by_role("button", name="Weiter").first.click()
             page.wait_for_timeout(2500)
 
-            # فعّل كل مربعات المستندات عبر JS وأطلق أحداث change
-            page.evaluate("""() => {
-                const cbs = document.querySelectorAll('input.documentlist_item_cb, .modal input[type=checkbox]');
-                cbs.forEach(cb => {
-                    if (!cb.checked) {
-                        cb.checked = true;
-                        cb.dispatchEvent(new Event('change', {bubbles: true}));
-                        cb.dispatchEvent(new Event('click', {bubbles: true}));
-                    }
-                });
-                return cbs.length;
-            }""")
+            # انقر فعلياً على كل label.required داخل النافذة (force)
+            labels = page.locator(".modal label.required")
+            n = labels.count()
+            for i in range(n):
+                try:
+                    labels.nth(i).scroll_into_view_if_needed(timeout=3000)
+                    labels.nth(i).click(force=True, timeout=3000)
+                    page.wait_for_timeout(200)
+                except Exception:
+                    pass
             page.wait_for_timeout(1500)
-            shot("5- بعد تفعيل المربعات")
+            shot(f"5- بعد نقر {n} labels")
 
             page.get_by_role("button", name="OK").first.click()
             page.wait_for_timeout(2500)
