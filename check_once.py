@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Termin Watcher - GitHub Actions version (run once then exit).
-نسخة تشخيص: تمر بالخطوات وتصور كل خطوة على تيليجرام.
+نسخة تشخيص.
 """
 import os
 import smtplib
@@ -87,26 +87,25 @@ def main():
             page.goto(start, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
 
-            # اقبل الكوكيز إن ظهرت
             try:
                 page.get_by_role("button", name="Akzeptieren").click(timeout=5000)
                 page.wait_for_timeout(1500)
             except Exception:
                 pass
-            shot("1- بعد قبول الكوكيز")
 
-            # افتح قسم Studierende (عنصر مرئي فقط، ليس tooltip)
             page.get_by_text(
                 "Studierende und Anerkennung der Berufsqualifikation", exact=False
             ).locator("visible=true").first.click()
             page.wait_for_timeout(2000)
-            shot("2- بعد فتح Studierende")
 
-            # اضغط + بجانب Auflagenänderung
-            box = page.locator(
-                "xpath=//*[contains(text(),'Auflagenänderung')]/following::*[self::button or self::a or self::input][1]"
+            # صفّ Auflagenänderung، ثم زر + (آخر زر مرئي في الصف)
+            row = page.locator(
+                "xpath=//*[contains(normalize-space(.),'Auflagenänderung')]"
+                "[contains(@class,'row') or self::tr or self::li or self::div]"
+                "[.//button or .//input[@type='button']][last()]"
             ).first
-            box.click()
+            plus = row.get_by_role("button").filter(has_text="+").last
+            plus.click()
             page.wait_for_timeout(1500)
             shot("3- بعد الضغط على +")
 
