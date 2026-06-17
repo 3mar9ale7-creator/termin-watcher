@@ -22,8 +22,6 @@ jobs:
       - name: Install Playwright browser (if not cached)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: python -m playwright install --with-deps chromium
-      - name: Install system deps (always)
-        run: python -m playwright install-deps chromium
       - name: Run check
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
