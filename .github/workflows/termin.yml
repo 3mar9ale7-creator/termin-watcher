@@ -16,7 +16,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-v1
+          key: playwright-chromium-v2
       - name: Install Python deps
         run: pip install playwright requests
       - name: Install Playwright browser (if not cached)
